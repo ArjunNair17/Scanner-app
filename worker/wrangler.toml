@@ -1,0 +1,12 @@
+name = "protein-scanner"
+main = "src/index.ts"
+compatibility_date = "2026-01-15"
+
+[vars]
+GEMINI_MODEL = "gemini-2.5-flash-lite"
+
+# Optional durable counter. Without it the worker uses Cache API.
+# Create with: wrangler kv namespace create RATE_LIMIT
+# [[kv_namespaces]]
+# binding = "RATE_LIMIT"
+# id = "replace-me"
