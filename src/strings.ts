@@ -100,6 +100,9 @@ export const camera = {
   tip: "Fit the whole plate in frame.",
   library: "Choose a photo",
   permission: "Camera access is needed to photograph your plate.",
+  webTitle: "Scan a plate",
+  webHint: "Desktop preview — the camera is stubbed. Choose a JPEG or use the sample plate.",
+  sample: "Use sample plate",
 };
 
 export const analyzing = {

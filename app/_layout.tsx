@@ -7,7 +7,13 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { AppProvider } from "../src/context/AppContext";
 import { colors } from "../src/theme";
 
-Appearance.setColorScheme("light");
+try {
+  if (typeof Appearance.setColorScheme === "function") {
+    Appearance.setColorScheme("light");
+  }
+} catch {
+  // react-native-web has no setColorScheme; app.config userInterfaceStyle stays light.
+}
 
 export default function RootLayout() {
   return (

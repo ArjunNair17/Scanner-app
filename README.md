@@ -32,6 +32,24 @@ npm install
 npx expo start
 ```
 
+### Desktop browser (Tester — no iPhone / Expo Go)
+
+Web was broken on `main` (Metro 500 `transformFile`) because `babel-preset-expo` was not hoisted and `expo-sqlite` / `react-native-purchases` have no usable web bundle. This branch installs the web Babel/React deps and stubs those modules on web only.
+
+```bash
+cp .env.example .env          # leave WORKER_URL empty; web always uses the scan stub
+npm install
+npx expo start --web
+```
+
+Or `npm run web`. When Metro is ready, open the URL it prints (usually **http://localhost:8081**). If the browser does not open itself, paste that URL.
+
+Walk: **Welcome → Continue → Quiz (3 questions) → Preparing → Paywall (X or “Continue with 3 free scans”) → Today → Scan → consent → Use sample plate (or Choose a photo) → Result → Save to Today → History tab.**
+
+Camera is stubbed on web (file picker + sample plate). Purchases stay on the existing RevenueCat stub (Close X / continue free). Meals persist in `localStorage` for that browser origin. iOS / Expo Go still use the native camera, SQLite, and purchases path.
+
+`npm run test:web-bundle` exports a static web build (`npx expo export --platform web`) as a Metro smoke check.
+
 ### Expo Go vs dev client
 
 | | Expo Go | Dev client (`npx expo run:ios` / EAS `development`) |

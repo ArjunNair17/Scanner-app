@@ -1,4 +1,5 @@
 import * as FileSystem from "expo-file-system/legacy";
+import { Platform } from "react-native";
 import type { FoodEstimate, ScanErrorCode } from "../types";
 
 export type ScanOk = { ok: true; food: FoodEstimate };
@@ -22,6 +23,7 @@ export function workerUrl(): string {
 }
 
 export function useScanStub(): boolean {
+  if (Platform.OS === "web") return true;
   const stub = process.env.EXPO_PUBLIC_SCAN_STUB === "1";
   const missing = !workerUrl();
   return stub || (__DEV__ && missing);
