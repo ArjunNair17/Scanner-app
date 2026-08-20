@@ -1,6 +1,6 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useMemo, useState } from "react";
-import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
+import { Alert, Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { Button } from "../src/components/Button";
 import { Screen } from "../src/components/Screen";
 import { useApp } from "../src/context/AppContext";
@@ -20,6 +20,7 @@ export default function ResultScreen() {
   const app = useApp();
   const params = useLocalSearchParams<{ food?: string; error?: string; message?: string }>();
   const [portion, setPortion] = useState(1);
+  const [saving, setSaving] = useState(false);
 
   const food = useMemo<FoodEstimate | null>(() => {
     if (!params.food) return null;
@@ -34,8 +35,27 @@ export default function ResultScreen() {
   const scaled = food && food.identified ? applyPortion(food, portion) : null;
   const rough = (food?.confidence ?? 100) < 60;
 
+  const goToday = () => {
+    router.replace("/(tabs)/today");
+  };
+
+  const afterSave = async () => {
+    if (!app.firstSaveTipShown) {
+      await app.markFirstSaveTipShown();
+      if (Platform.OS === "web") {
+        if (typeof window !== "undefined") window.alert(todayCopy.firstSaveTip);
+        goToday();
+        return;
+      }
+      Alert.alert("Saved", todayCopy.firstSaveTip, [{ text: "OK", onPress: goToday }]);
+      return;
+    }
+    goToday();
+  };
+
   const save = async () => {
-    if (!food || !scaled) return;
+    if (!food || !scaled || saving) return;
+    setSaving(true);
     const meal: Meal = {
       id: newId(),
       date: localDayKey(),
@@ -50,15 +70,12 @@ export default function ResultScreen() {
       portion,
       confidence: food.confidence,
     };
-    await app.saveMeal(meal);
-    if (!app.firstSaveTipShown) {
-      await app.markFirstSaveTipShown();
-      Alert.alert("Saved", todayCopy.firstSaveTip, [
-        { text: "OK", onPress: () => router.replace("/(tabs)/today") },
-      ]);
-      return;
+    try {
+      await app.saveMeal(meal);
+      await afterSave();
+    } catch {
+      setSaving(false);
     }
-    router.replace("/(tabs)/today");
   };
 
   if (error || !food || !food.identified) {
@@ -105,7 +122,7 @@ export default function ResultScreen() {
       </View>
 
       <Text style={styles.disclaimer}>{copy.disclaimer}</Text>
-      <Button label={copy.save} onPress={() => void save()} />
+      <Button label={copy.save} onPress={() => void save()} loading={saving} disabled={saving} />
       <Button label={copy.retry} variant="ghost" onPress={() => router.replace("/camera")} />
     </Screen>
   );
