@@ -1,10 +1,14 @@
 import * as FileSystem from "expo-file-system/legacy";
 import * as ImageManipulator from "expo-image-manipulator";
+import { isNonFilePhotoUri } from "./image-uri";
+
+export { isNonFilePhotoUri, SAMPLE_PLATE_URI } from "./image-uri";
 
 export const MAX_EDGE = 1024;
 export const JPEG_QUALITY = 0.7;
 
 export async function resizeForScan(uri: string): Promise<string> {
+  if (uri.startsWith("stub://")) return uri;
   const result = await ImageManipulator.manipulateAsync(
     uri,
     [{ resize: { width: MAX_EDGE } }],
@@ -15,7 +19,7 @@ export async function resizeForScan(uri: string): Promise<string> {
 
 export async function discardPhoto(uri: string | null | undefined): Promise<void> {
   if (!uri) return;
-  if (uri.startsWith("ph://") || uri.startsWith("assets-library://") || uri.startsWith("content://")) {
+  if (isNonFilePhotoUri(uri)) {
     return;
   }
   try {
