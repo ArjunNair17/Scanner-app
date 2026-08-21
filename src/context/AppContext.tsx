@@ -4,7 +4,8 @@ import type { Meal, QuizAnswers, Targets } from "../types";
 import { ensureDay, insertMeal, mealsForDate, todaySnapshot, totals, updateDayTargets } from "../lib/db";
 import { getOrCreateDeviceId } from "../lib/device";
 import { localDayKey } from "../lib/day";
-import { incrementFreeScans, remainingFreeScans } from "../lib/scans";
+import { parseAiConsentAccepted, readAiConsentAccepted } from "../lib/consent";
+import { planIdentifiedSave, remainingFreeScans } from "../lib/scans";
 import { STORAGE_KEYS } from "../lib/storage";
 import { DEFAULT_TARGETS } from "../lib/targets";
 import { getPurchases, type OfferingsResult } from "../purchases";
@@ -17,6 +18,7 @@ type AppContextValue = {
   freeScansUsed: number;
   freeScansLeft: number;
   aiConsentAccepted: boolean;
+  consentHydrated: boolean;
   deviceId: string;
   firstSaveTipShown: boolean;
   isPremium: boolean;
@@ -28,6 +30,7 @@ type AppContextValue = {
   todayCalories: number;
   completeOnboarding: (quiz: QuizAnswers, targets: Targets) => Promise<void>;
   acceptConsent: () => Promise<void>;
+  refreshConsent: () => Promise<boolean>;
   setTargets: (targets: Targets) => Promise<void>;
   consumeIdentifiedScan: () => Promise<number>;
   saveMeal: (meal: Meal) => Promise<void>;
@@ -54,7 +57,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [quiz, setQuiz] = useState<QuizAnswers | null>(null);
   const [targets, setTargetsState] = useState<Targets>(DEFAULT_TARGETS);
   const [freeScansUsed, setFreeScansUsed] = useState(0);
-  const [aiConsentAccepted, setAiConsentAccepted] = useState(false);
+  const [aiConsentAccepted, setAiConsentAccepted] = useState<boolean | null>(null);
   const [deviceId, setDeviceId] = useState("");
   const [firstSaveTipShown, setFirstSaveTipShown] = useState(false);
   const [isPremium, setIsPremium] = useState(false);
@@ -86,7 +89,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setQuiz(nextQuiz);
       setTargetsState(nextTargets);
       setFreeScansUsed(Number(usedRaw || 0) || 0);
-      setAiConsentAccepted(consent === "1");
+      setAiConsentAccepted(parseAiConsentAccepted(consent));
       setFirstSaveTipShown(tip === "1");
       setDeviceId(id);
 
@@ -117,8 +120,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, [loadToday]);
 
   const acceptConsent = useCallback(async () => {
-    setAiConsentAccepted(true);
     await AsyncStorage.setItem(STORAGE_KEYS.aiConsentAccepted, "1");
+    setAiConsentAccepted(true);
+  }, []);
+
+  const refreshConsent = useCallback(async () => {
+    const accepted = await readAiConsentAccepted(AsyncStorage);
+    setAiConsentAccepted(accepted);
+    return accepted;
   }, []);
 
   const setTargets = useCallback(async (next: Targets) => {
@@ -128,11 +137,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const consumeIdentifiedScan = useCallback(async () => {
-    const next = incrementFreeScans(freeScansUsed, true);
-    setFreeScansUsed(next);
-    await AsyncStorage.setItem(STORAGE_KEYS.freeScansUsed, String(next));
-    return next;
-  }, [freeScansUsed]);
+    if (isPremium) return freeScansUsed;
+    const plan = planIdentifiedSave({
+      identified: true,
+      isPremium: false,
+      freeScansUsed,
+    });
+    if (!plan.consume) return freeScansUsed;
+    setFreeScansUsed(plan.nextUsed);
+    await AsyncStorage.setItem(STORAGE_KEYS.freeScansUsed, String(plan.nextUsed));
+    return plan.nextUsed;
+  }, [freeScansUsed, isPremium]);
 
   const saveMeal = useCallback(async (meal: Meal) => {
     await insertMeal(meal);
@@ -165,7 +180,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       targets,
       freeScansUsed,
       freeScansLeft: remainingFreeScans(freeScansUsed),
-      aiConsentAccepted,
+      aiConsentAccepted: aiConsentAccepted === true,
+      consentHydrated: aiConsentAccepted !== null,
       deviceId,
       firstSaveTipShown,
       isPremium,
@@ -177,6 +193,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       todayCalories: sums.calories,
       completeOnboarding,
       acceptConsent,
+      refreshConsent,
       setTargets,
       consumeIdentifiedScan,
       saveMeal,
@@ -202,6 +219,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       sums.calories,
       completeOnboarding,
       acceptConsent,
+      refreshConsent,
       setTargets,
       consumeIdentifiedScan,
       saveMeal,

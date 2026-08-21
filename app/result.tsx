@@ -6,6 +6,7 @@ import { Screen } from "../src/components/Screen";
 import { useApp } from "../src/context/AppContext";
 import { localDayKey } from "../src/lib/day";
 import { applyPortion, formatPortion, PORTION_OPTIONS } from "../src/lib/portion";
+import { planIdentifiedSave } from "../src/lib/scans";
 import { currentSlot } from "../src/lib/slot";
 import { errors, result as copy, today as todayCopy } from "../src/strings";
 import { colors, radius, space, type } from "../src/theme";
@@ -36,6 +37,16 @@ export default function ResultScreen() {
 
   const save = async () => {
     if (!food || !scaled) return;
+    const plan = planIdentifiedSave({
+      identified: food.identified,
+      isPremium: app.isPremium,
+      freeScansUsed: app.freeScansUsed,
+    });
+    if (plan.action === "paywall") {
+      router.replace({ pathname: "/paywall", params: { from: "gate" } });
+      return;
+    }
+    if (plan.action === "skip") return;
     const meal: Meal = {
       id: newId(),
       date: localDayKey(),
@@ -51,6 +62,9 @@ export default function ResultScreen() {
       confidence: food.confidence,
     };
     await app.saveMeal(meal);
+    if (plan.consume) {
+      await app.consumeIdentifiedScan();
+    }
     if (!app.firstSaveTipShown) {
       await app.markFirstSaveTipShown();
       Alert.alert("Saved", todayCopy.firstSaveTip, [
