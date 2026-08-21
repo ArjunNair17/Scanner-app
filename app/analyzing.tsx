@@ -43,16 +43,6 @@ export default function AnalyzingScreen() {
           });
           return;
         }
-        if (!result.food.identified) {
-          router.replace({
-            pathname: "/result",
-            params: { food: JSON.stringify(result.food) },
-          });
-          return;
-        }
-        if (!app.isPremium) {
-          await app.consumeIdentifiedScan();
-        }
         router.replace({
           pathname: "/result",
           params: { food: JSON.stringify(result.food) },

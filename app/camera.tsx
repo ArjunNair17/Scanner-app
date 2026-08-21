@@ -1,16 +1,42 @@
 import { CameraView, useCameraPermissions } from "expo-camera";
 import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { CloseX } from "../src/components/CloseX";
 import { useApp } from "../src/context/AppContext";
-import { canScan } from "../src/lib/scans";
+import { scanEntryRoute } from "../src/lib/scans";
 import { camera as copy } from "../src/strings";
 import { colors, type } from "../src/theme";
 
 export default function CameraScreen() {
+  const router = useRouter();
+  const app = useApp();
+  const dest = scanEntryRoute({
+    aiConsentAccepted: app.aiConsentAccepted,
+    isPremium: app.isPremium,
+    freeScansUsed: app.freeScansUsed,
+  });
+
+  useEffect(() => {
+    if (dest === "consent") {
+      router.replace("/consent");
+      return;
+    }
+    if (dest === "paywall") {
+      router.replace({ pathname: "/paywall", params: { from: "gate" } });
+    }
+  }, [dest, router]);
+
+  if (dest !== "camera") {
+    return <View style={styles.black} />;
+  }
+
+  return <CameraCapture />;
+}
+
+function CameraCapture() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const app = useApp();
@@ -23,11 +49,16 @@ export default function CameraScreen() {
   };
 
   const gate = () => {
-    if (!app.aiConsentAccepted) {
+    const dest = scanEntryRoute({
+      aiConsentAccepted: app.aiConsentAccepted,
+      isPremium: app.isPremium,
+      freeScansUsed: app.freeScansUsed,
+    });
+    if (dest === "consent") {
       router.replace("/consent");
       return false;
     }
-    if (!canScan(app.isPremium, app.freeScansUsed)) {
+    if (dest === "paywall") {
       router.replace({ pathname: "/paywall", params: { from: "gate" } });
       return false;
     }

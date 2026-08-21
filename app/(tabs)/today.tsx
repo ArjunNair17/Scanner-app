@@ -6,7 +6,7 @@ import { MealRow } from "../../src/components/MealRow";
 import { Ring } from "../../src/components/Ring";
 import { Screen } from "../../src/components/Screen";
 import { useApp } from "../../src/context/AppContext";
-import { canScan } from "../../src/lib/scans";
+import { scanEntryRoute } from "../../src/lib/scans";
 import { prettyDate, localDayKey } from "../../src/lib/day";
 import { today as copy } from "../../src/strings";
 import { colors, space, type } from "../../src/theme";
@@ -16,11 +16,16 @@ export default function TodayScreen() {
   const app = useApp();
 
   const onScan = useCallback(() => {
-    if (!app.aiConsentAccepted) {
+    const dest = scanEntryRoute({
+      aiConsentAccepted: app.aiConsentAccepted,
+      isPremium: app.isPremium,
+      freeScansUsed: app.freeScansUsed,
+    });
+    if (dest === "consent") {
       router.push("/consent");
       return;
     }
-    if (!canScan(app.isPremium, app.freeScansUsed)) {
+    if (dest === "paywall") {
       router.push({ pathname: "/paywall", params: { from: "gate" } });
       return;
     }

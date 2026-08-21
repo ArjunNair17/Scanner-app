@@ -4,7 +4,7 @@ import type { Meal, QuizAnswers, Targets } from "../types";
 import { ensureDay, insertMeal, mealsForDate, todaySnapshot, totals, updateDayTargets } from "../lib/db";
 import { getOrCreateDeviceId } from "../lib/device";
 import { localDayKey } from "../lib/day";
-import { incrementFreeScans, remainingFreeScans } from "../lib/scans";
+import { planIdentifiedSave, remainingFreeScans } from "../lib/scans";
 import { STORAGE_KEYS } from "../lib/storage";
 import { DEFAULT_TARGETS } from "../lib/targets";
 import { getPurchases, type OfferingsResult } from "../purchases";
@@ -128,11 +128,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const consumeIdentifiedScan = useCallback(async () => {
-    const next = incrementFreeScans(freeScansUsed, true);
-    setFreeScansUsed(next);
-    await AsyncStorage.setItem(STORAGE_KEYS.freeScansUsed, String(next));
-    return next;
-  }, [freeScansUsed]);
+    if (isPremium) return freeScansUsed;
+    const plan = planIdentifiedSave({
+      identified: true,
+      isPremium: false,
+      freeScansUsed,
+    });
+    if (!plan.consume) return freeScansUsed;
+    setFreeScansUsed(plan.nextUsed);
+    await AsyncStorage.setItem(STORAGE_KEYS.freeScansUsed, String(plan.nextUsed));
+    return plan.nextUsed;
+  }, [freeScansUsed, isPremium]);
 
   const saveMeal = useCallback(async (meal: Meal) => {
     await insertMeal(meal);

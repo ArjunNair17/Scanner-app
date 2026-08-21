@@ -1,5 +1,12 @@
 export const FREE_SCAN_LIMIT = 3;
 
+export type ScanEntry = "consent" | "paywall" | "camera";
+
+export type IdentifiedSavePlan =
+  | { action: "save"; nextUsed: number; consume: boolean }
+  | { action: "paywall"; nextUsed: number; consume: false }
+  | { action: "skip"; nextUsed: number; consume: false };
+
 export function remainingFreeScans(used: number): number {
   return Math.max(0, FREE_SCAN_LIMIT - Math.max(0, used));
 }
@@ -22,18 +29,50 @@ export function canScan(isPremium: boolean, used: number): boolean {
   return isPremium || canUseFreeScan(used);
 }
 
+/**
+ * First-scan AI consent must run before camera/picker. Later scans skip it
+ * once `ai_consent_accepted` is stored.
+ */
+export function scanEntryRoute(input: {
+  aiConsentAccepted: boolean;
+  isPremium: boolean;
+  freeScansUsed: number;
+}): ScanEntry {
+  if (!input.aiConsentAccepted) return "consent";
+  if (!canScan(input.isPremium, input.freeScansUsed)) return "paywall";
+  return "camera";
+}
+
+/**
+ * Identified Save (including stub / fixture Result) consumes one free scan.
+ * Failed or unidentified plates do not. The 4th lifetime identified save
+ * hits the paywall and must not persist the meal.
+ */
+export function planIdentifiedSave(input: {
+  identified: boolean;
+  isPremium: boolean;
+  freeScansUsed: number;
+}): IdentifiedSavePlan {
+  if (!input.identified) {
+    return { action: "skip", nextUsed: input.freeScansUsed, consume: false };
+  }
+  if (input.isPremium) {
+    return { action: "save", nextUsed: input.freeScansUsed, consume: false };
+  }
+  if (!canUseFreeScan(input.freeScansUsed)) {
+    return { action: "paywall", nextUsed: input.freeScansUsed, consume: false };
+  }
+  return {
+    action: "save",
+    nextUsed: incrementFreeScans(input.freeScansUsed, true),
+    consume: true,
+  };
+}
+
 export function isIdentifiedOnlyGate(identified: boolean, isPremium: boolean, used: number): {
   allowed: boolean;
   nextUsed: number;
 } {
-  if (!identified) {
-    return { allowed: true, nextUsed: used };
-  }
-  if (isPremium) {
-    return { allowed: true, nextUsed: used };
-  }
-  if (!canUseFreeScan(used)) {
-    return { allowed: false, nextUsed: used };
-  }
-  return { allowed: true, nextUsed: incrementFreeScans(used, true) };
+  const plan = planIdentifiedSave({ identified, isPremium, freeScansUsed: used });
+  return { allowed: plan.action !== "paywall", nextUsed: plan.nextUsed };
 }

@@ -5,7 +5,7 @@ import { Button } from "../src/components/Button";
 import { CloseX } from "../src/components/CloseX";
 import { Screen } from "../src/components/Screen";
 import { useApp } from "../src/context/AppContext";
-import { canScan } from "../src/lib/scans";
+import { scanEntryRoute } from "../src/lib/scans";
 import { consent } from "../src/strings";
 import { colors, type } from "../src/theme";
 
@@ -13,9 +13,18 @@ export default function ConsentScreen() {
   const router = useRouter();
   const app = useApp();
 
+  const backToToday = () => {
+    router.replace("/(tabs)/today");
+  };
+
   const accept = async () => {
     await app.acceptConsent();
-    if (!canScan(app.isPremium, app.freeScansUsed)) {
+    const dest = scanEntryRoute({
+      aiConsentAccepted: true,
+      isPremium: app.isPremium,
+      freeScansUsed: app.freeScansUsed,
+    });
+    if (dest === "paywall") {
       router.replace({ pathname: "/paywall", params: { from: "gate" } });
       return;
     }
@@ -25,14 +34,14 @@ export default function ConsentScreen() {
   return (
     <Screen>
       <View style={styles.top}>
-        <CloseX onPress={() => router.back()} />
+        <CloseX onPress={backToToday} />
       </View>
       <View style={styles.body}>
         <Text style={styles.h1}>{consent.title}</Text>
         <Text style={styles.copy}>{consent.body}</Text>
       </View>
       <Button label={consent.accept} onPress={() => void accept()} />
-      <Button label={consent.decline} variant="ghost" onPress={() => router.back()} />
+      <Button label={consent.decline} variant="ghost" onPress={backToToday} />
     </Screen>
   );
 }
