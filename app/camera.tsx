@@ -1,35 +1,54 @@
 import { CameraView, useCameraPermissions } from "expo-camera";
 import * as ImagePicker from "expo-image-picker";
-import { useRouter } from "expo-router";
-import React, { useEffect, useRef, useState } from "react";
+import { useFocusEffect, useRouter } from "expo-router";
+import React, { useCallback, useRef, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { CloseX } from "../src/components/CloseX";
 import { useApp } from "../src/context/AppContext";
-import { scanEntryRoute } from "../src/lib/scans";
+import { mayMountCamera, scanEntryRoute } from "../src/lib/scans";
 import { camera as copy } from "../src/strings";
 import { colors, type } from "../src/theme";
 
 export default function CameraScreen() {
   const router = useRouter();
-  const app = useApp();
-  const dest = scanEntryRoute({
-    aiConsentAccepted: app.aiConsentAccepted,
-    isPremium: app.isPremium,
-    freeScansUsed: app.freeScansUsed,
-  });
+  const { refreshConsent, isPremium, freeScansUsed } = useApp();
+  const [canMount, setCanMount] = useState(false);
 
-  useEffect(() => {
-    if (dest === "consent") {
-      router.replace("/consent");
-      return;
-    }
-    if (dest === "paywall") {
-      router.replace({ pathname: "/paywall", params: { from: "gate" } });
-    }
-  }, [dest, router]);
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+      setCanMount(false);
 
-  if (dest !== "camera") {
+      (async () => {
+        const accepted = await refreshConsent();
+        if (cancelled) return;
+        const dest = scanEntryRoute({
+          aiConsentAccepted: accepted,
+          isPremium,
+          freeScansUsed,
+        });
+        if (dest === "consent") {
+          router.replace("/consent");
+          return;
+        }
+        if (dest === "paywall") {
+          router.replace({ pathname: "/paywall", params: { from: "gate" } });
+          return;
+        }
+        if (mayMountCamera(dest) && !cancelled) {
+          setCanMount(true);
+        }
+      })();
+
+      return () => {
+        cancelled = true;
+        setCanMount(false);
+      };
+    }, [freeScansUsed, isPremium, refreshConsent, router]),
+  );
+
+  if (!canMount) {
     return <View style={styles.black} />;
   }
 
@@ -48,9 +67,10 @@ function CameraCapture() {
     router.replace({ pathname: "/analyzing", params: { uri } });
   };
 
-  const gate = () => {
+  const gate = async () => {
+    const accepted = await app.refreshConsent();
     const dest = scanEntryRoute({
-      aiConsentAccepted: app.aiConsentAccepted,
+      aiConsentAccepted: accepted,
       isPremium: app.isPremium,
       freeScansUsed: app.freeScansUsed,
     });
@@ -62,11 +82,12 @@ function CameraCapture() {
       router.replace({ pathname: "/paywall", params: { from: "gate" } });
       return false;
     }
-    return true;
+    return mayMountCamera(dest);
   };
 
   const snap = async () => {
-    if (busy || !gate()) return;
+    if (busy) return;
+    if (!(await gate())) return;
     setBusy(true);
     try {
       const photo = await cameraRef.current?.takePictureAsync({ quality: 0.8, skipProcessing: true });
@@ -77,7 +98,8 @@ function CameraCapture() {
   };
 
   const pick = async () => {
-    if (busy || !gate()) return;
+    if (busy) return;
+    if (!(await gate())) return;
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ["images"],
       quality: 0.8,

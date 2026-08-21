@@ -23,6 +23,13 @@ describe("first-scan AI consent gate", () => {
     );
   });
 
+  it("unresolved in-memory consent must not race to camera", () => {
+    assert.equal(
+      scanEntryRoute({ aiConsentAccepted: null, isPremium: false, freeScansUsed: 0 }),
+      "consent",
+    );
+  });
+
   it("accepted consent skips the gate and opens camera while scans remain", () => {
     assert.equal(
       scanEntryRoute({ aiConsentAccepted: true, isPremium: false, freeScansUsed: 0 }),

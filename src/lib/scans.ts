@@ -31,16 +31,23 @@ export function canScan(isPremium: boolean, used: number): boolean {
 
 /**
  * First-scan AI consent must run before camera/picker. Later scans skip it
- * once `ai_consent_accepted` is stored.
+ * once `ai_consent_accepted` is stored as `"1"`.
+ *
+ * Unresolved (`null`) is not accepted — never mount camera/picker until a
+ * storage read confirms the flag. In-memory `true` is not enough.
  */
 export function scanEntryRoute(input: {
-  aiConsentAccepted: boolean;
+  aiConsentAccepted: boolean | null;
   isPremium: boolean;
   freeScansUsed: number;
 }): ScanEntry {
-  if (!input.aiConsentAccepted) return "consent";
+  if (input.aiConsentAccepted !== true) return "consent";
   if (!canScan(input.isPremium, input.freeScansUsed)) return "paywall";
   return "camera";
+}
+
+export function mayMountCamera(dest: ScanEntry): dest is "camera" {
+  return dest === "camera";
 }
 
 /**

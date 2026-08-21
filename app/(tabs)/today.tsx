@@ -1,12 +1,12 @@
 import { useRouter } from "expo-router";
-import React, { useCallback } from "react";
+import React, { useCallback, useRef, useState } from "react";
 import { Alert, StyleSheet, Text, View } from "react-native";
 import { Button } from "../../src/components/Button";
 import { MealRow } from "../../src/components/MealRow";
 import { Ring } from "../../src/components/Ring";
 import { Screen } from "../../src/components/Screen";
 import { useApp } from "../../src/context/AppContext";
-import { scanEntryRoute } from "../../src/lib/scans";
+import { mayMountCamera, scanEntryRoute } from "../../src/lib/scans";
 import { prettyDate, localDayKey } from "../../src/lib/day";
 import { today as copy } from "../../src/strings";
 import { colors, space, type } from "../../src/theme";
@@ -14,23 +14,36 @@ import { colors, space, type } from "../../src/theme";
 export default function TodayScreen() {
   const router = useRouter();
   const app = useApp();
+  const [gating, setGating] = useState(false);
+  const gatingRef = useRef(false);
 
-  const onScan = useCallback(() => {
-    const dest = scanEntryRoute({
-      aiConsentAccepted: app.aiConsentAccepted,
-      isPremium: app.isPremium,
-      freeScansUsed: app.freeScansUsed,
-    });
-    if (dest === "consent") {
-      router.push("/consent");
-      return;
+  const onScan = useCallback(async () => {
+    if (gatingRef.current) return;
+    gatingRef.current = true;
+    setGating(true);
+    try {
+      const accepted = await app.refreshConsent();
+      const dest = scanEntryRoute({
+        aiConsentAccepted: accepted,
+        isPremium: app.isPremium,
+        freeScansUsed: app.freeScansUsed,
+      });
+      if (dest === "consent") {
+        router.push("/consent");
+        return;
+      }
+      if (dest === "paywall") {
+        router.push({ pathname: "/paywall", params: { from: "gate" } });
+        return;
+      }
+      if (mayMountCamera(dest)) {
+        router.push("/camera");
+      }
+    } finally {
+      gatingRef.current = false;
+      setGating(false);
     }
-    if (dest === "paywall") {
-      router.push({ pathname: "/paywall", params: { from: "gate" } });
-      return;
-    }
-    router.push("/camera");
-  }, [app.aiConsentAccepted, app.freeScansUsed, app.isPremium, router]);
+  }, [app, router]);
 
   return (
     <Screen scroll>
@@ -64,7 +77,7 @@ export default function TodayScreen() {
       )}
 
       <View style={styles.cta}>
-        <Button label={copy.scan} onPress={onScan} />
+        <Button label={copy.scan} onPress={() => void onScan()} loading={gating} disabled={!app.ready} />
         {!app.isPremium && (
           <Text style={styles.left}>
             {app.freeScansLeft} free scan{app.freeScansLeft === 1 ? "" : "s"} left
